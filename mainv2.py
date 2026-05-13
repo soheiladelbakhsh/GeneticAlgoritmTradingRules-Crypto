@@ -430,22 +430,20 @@ def crossover(parent1, parent2, feature_info):
 
 
 def mutate(strategy, feature_info, mutation_rate=0.15):
-    """Mutate a strategy"""
     mutated = copy.deepcopy(strategy)
     
-    # Mutate rules
+    # Mutate existing rules
     for i in range(len(mutated["conditions"])):
         rule = mutated["conditions"][i]
         
-        if random.random() < mutation_rate:
-            # Mutate one random feature in the rule
+        if random.random() < mutation_rate and feature_info:
             idx = random.randint(0, len(rule)-1)
-            if random.random() < 0.3:
-                rule[idx] = feature_info[idx]["dont_care"]  # turn off
+            if random.random() < 0.4:
+                rule[idx] = feature_info[idx]["dont_care"]   # deactivate
             else:
                 rule[idx] = random.randint(0, feature_info[idx]["num_classes"] - 1)
         
-        # Mutate TP/SL/CP
+        # Mutate TP / SL / CP
         if random.random() < mutation_rate:
             mutated["tps"][i] = round(random.uniform(0.8, 6.0), 2)
         if random.random() < mutation_rate:
@@ -453,15 +451,16 @@ def mutate(strategy, feature_info, mutation_rate=0.15):
         if random.random() < mutation_rate:
             mutated["cps"][i] = int(random.uniform(5, 60))
     
-    # Sometimes add or remove a rule
-    if random.random() < 0.1 and len(mutated["conditions"]) < 7:
-        new_rule = generate_random_strategy(feature_info, max_rules=1)
-        mutated["conditions"].append(new_rule["conditions"][0])
-        mutated["tps"].append(new_rule["tps"][0])
-        mutated["sls"].append(new_rule["sls"][0])
-        mutated["cps"].append(new_rule["cps"][0])
+    # Add new rule safely
+    if random.random() < 0.12 and len(mutated["conditions"]) < 8 and feature_info:
+        new_strat = generate_random_strategy(feature_info)
+        mutated["conditions"].append(new_strat["conditions"][0])
+        mutated["tps"].append(new_strat["tps"][0])
+        mutated["sls"].append(new_strat["sls"][0])
+        mutated["cps"].append(new_strat["cps"][0])
     
-    elif random.random() < 0.1 and len(mutated["conditions"]) > 2:
+    # Remove rule
+    elif random.random() < 0.12 and len(mutated["conditions"]) > 2:
         idx = random.randint(0, len(mutated["conditions"])-1)
         del mutated["conditions"][idx]
         del mutated["tps"][idx]
@@ -469,7 +468,6 @@ def mutate(strategy, feature_info, mutation_rate=0.15):
         del mutated["cps"][idx]
     
     return mutated
-
 
 # =========================================================
 # MAIN GENETIC ALGORITHM
@@ -490,8 +488,10 @@ def run_genetic_algorithm(df, feature_info, feature_cols,
     print(f"Starting GA with {population_size} individuals for {generations} generations...\n")
     
     for gen in range(generations):
+
+        print(f"\n"+"===" * 10 + f" Generation {gen+1} " + "===" * 10)
         # Evaluate current population
-        results = evaluate_population(df, population, feature_cols, direction, min_trades)
+        results = evaluate_population(df, population)
         
         # Find best in this generation
         gen_best_idx = np.argmax([r["fitness"] for r in results])
@@ -592,7 +592,7 @@ if __name__ == "__main__":
     DIRECTION = 'long'
     POPULATION_SIZE = 10
     GENERATION=10
-    MIN_TRADES = 50
+    MIN_TRADES = 10
     FEE_PCT = 0.2
     CROSSOVER_RATE = 0.7
     MUTATION_RATE = 0.1
@@ -613,22 +613,22 @@ if __name__ == "__main__":
     # Making initial population
     #=============================================
     # تولید قوانین عددی تصادفی (شما این بخش را با هوش مصنوعی خود جایگزین می‌کنید)
-    population = generate_population(POPULATION_SIZE, feature_info)
-    # ارزیابی جمعیت اولیه
-    results = evaluate_population(df, population) 
+    best_strategy = run_genetic_algorithm(
+    df=df,
+    feature_info=feature_info,
+    feature_cols=feature_cols,
+    population_size=POPULATION_SIZE,
+    generations=GENERATION,
+    mutation_rate=MUTATION_RATE,
+    direction=DIRECTION,
+    min_trades=MIN_TRADES
+    )
 
-    # 4. Get Best Strategy
-    best_index = np.argmax([r["fitness"] for r in results])
-    best_strategy = population[best_index]
-    best_result = results[best_index]
-
+    # Extract best components
     best_strategy_rules = best_strategy["conditions"]
     best_strategy_tps   = best_strategy["tps"]
     best_strategy_sls   = best_strategy["sls"]
     best_strategy_cps   = best_strategy["cps"]
-
-    print(f"\nBest Strategy ID: {best_strategy['id']}")
-    
     
 
     final_human_readable_strategy = decode_to_human_readable(
